@@ -68,6 +68,8 @@
     display:flex;flex-direction:column;
   }
   .block{outline:none;line-height:1.55;font-family:var(--page-font,inherit);}
+  /* 「全选所有文字」激活时，给每行文字加可见的选中底色 */
+  body.allsel .block{background:rgba(45,127,249,.18);border-radius:5px;box-shadow:0 0 0 2px rgba(45,127,249,.28);}
   .block:focus{background:rgba(255,77,109,.06);border-radius:6px;}
   .block.title{font-size:var(--title-size);font-weight:800;line-height:1.25;}
   .block.heading{display:inline-block;background:var(--pink);color:var(--pink-strong);font-size:var(--heading-size);font-weight:700;padding:4px 10px;border-radius:6px;}
@@ -704,12 +706,14 @@ function withSel(fn){
 // ---------- 全选所有文字：把样式一次性应用到画布上每一个文字块 ----------
 let selectAllMode = false;
 const selectAllBtn = document.getElementById('selectAllBtn');
+function setSelectAll(on){
+  selectAllMode = on;
+  selectAllBtn.classList.toggle('on', on);
+  document.body.classList.toggle('allsel', on);   // 给所有文字加「已选中」蓝色底，肉眼可见
+  selectAllBtn.textContent = on ? '✅ 已全选 — 现在选字体/颜色即可整篇修改' : '🅰 全选所有文字';
+}
 selectAllBtn.addEventListener('mousedown', e=>e.preventDefault());
-selectAllBtn.addEventListener('click', ()=>{
-  selectAllMode = !selectAllMode;
-  selectAllBtn.classList.toggle('on', selectAllMode);
-  selectAllBtn.textContent = selectAllMode ? '✅ 已全选（改样式应用到全部·点此取消）' : '🅰 全选所有文字';
-});
+selectAllBtn.addEventListener('click', ()=> setSelectAll(!selectAllMode));
 function applyToAllText(fn){
   document.querySelectorAll('.block').forEach(el=>{
     if(!el.isContentEditable) return;
@@ -721,7 +725,8 @@ function applyToAllText(fn){
     if(el.__block) el.__block.html = el.innerHTML;
   });
   const sel = window.getSelection(); if(sel) sel.removeAllRanges();
-  relayout();   // 字体变化可能影响换行/分页，重排一次
+  setSelectAll(false);   // 应用一次后自动取消「全选」，回到正常编辑
+  relayout();            // 字体变化可能影响换行/分页，重排一次
 }
 // 路由：全选模式 → 应用到全部；否则 → 当前选区/整行
 function styleAll(fn){ if(selectAllMode) applyToAllText(fn); else withSel(fn); }
