@@ -67,7 +67,7 @@
     padding:48px 40px;overflow:hidden;position:relative;
     display:flex;flex-direction:column;
   }
-  .block{outline:none;line-height:1.55;}
+  .block{outline:none;line-height:1.55;font-family:var(--page-font,inherit);}
   .block:focus{background:rgba(255,77,109,.06);border-radius:6px;}
   .block.title{font-size:var(--title-size);font-weight:800;line-height:1.25;}
   .block.heading{display:inline-block;background:var(--pink);color:var(--pink-strong);font-size:var(--heading-size);font-weight:700;padding:4px 10px;border-radius:6px;}
@@ -119,6 +119,13 @@
       <label class="toggle" style="margin:6px 0 10px;"><input type="checkbox" id="stripTagsChk" checked> 自动删除 #话题标签</label>
       <button class="btn primary" onclick="autoLayout()">⚡ 一键自动排版</button>
       <div class="tip">排好后：点文字直接改；鼠标移到某行，右上角 ↑↓改顺序 / ⇄换类型 / ✕删除。编辑完点别处会自动重排、放不下自动翻页。</div>
+    </div>
+
+    <div class="group">
+      <div class="label">🎨 配色套装（防撞色）</div>
+      <button class="btn" id="randomThemeBtn">🎲 随机换一套配色 <span id="themeName" style="color:var(--muted);font-weight:400;"></span></button>
+      <label class="toggle" style="margin:4px 0 0;"><input type="checkbox" id="autoRandomChk"> 每次「一键排版」自动随机一套</label>
+      <div class="tip">一套 = 高亮色 + 字体 + 背景图案的组合。批量给不同博主出图时换一换，避免同一套视觉指纹被风控当成矩阵号。</div>
     </div>
 
     <div class="group">
@@ -602,11 +609,15 @@ function autoLayout(){
 
   const headingMark = /^[【\[]|^[◆■▶●·]\s*|[】\]]$/;          // 显式标记
   const bodySignal  = /[，。！？、；：,.!?;:…+]|[A-Za-z0-9]/;   // 含标点/字母数字 → 正文
+  // 结构化小标题：序号 / 误区·步骤类前缀（误区一、误区三：网络太弱、第三步、Tip3、①、3.…）
+  // —— 按「是不是一个并列的小标题」这个语义判断，不再单纯卡字数，避免同系列因字数不一而掉判
+  const enumHead = /^(?:[①-⑳]|[\(（]?\d{1,2}[\.、\)）：:]|第\s*[一二三四五六七八九十百0-9]+\s*[步个条点招式天章节课讲]?[、.．)）：:]?|(?:误区|步骤|方法|技巧|重点|关键|注意|提示|秘诀|要点|招|tips?|points?|step|part|note)\s*[一二三四五六七八九十0-9]+)/i;
 
   for(let i=1;i<lines.length;i++){
     const line = lines[i];
     const stripped = line.replace(/[【】\[\]（）()\s]/g,'');
     const looksHeading = headingMark.test(line)
+      || (enumHead.test(line) && stripped.length <= 18)                          // 结构化序号小标题
       || (stripped.length<=12 && stripped.length>=1 && !bodySignal.test(stripped));
     if(looksHeading){
       blocks.push({type:'heading', html: esc(line.replace(/^[【◆■▶●·]\s*/,'').replace(/】$/,''))});
@@ -617,6 +628,8 @@ function autoLayout(){
 
   state.blocks = blocks;
   relayout();
+  // 防撞色：勾选后每次排版自动换一套配色（applyTheme 内部会再 relayout）
+  if(document.getElementById('autoRandomChk') && document.getElementById('autoRandomChk').checked) randomTheme();
 }
 
 function nearestEl(node){ return node.nodeType===1 ? node : node.parentElement; }
@@ -761,6 +774,38 @@ patternBtns.forEach(btn=> btn.addEventListener('click', ()=>{
 document.getElementById('patternColor').oninput = e=>{ state.patternColor = e.target.value; relayout(); };
 document.getElementById('hlBg').oninput   = e=>{ document.documentElement.style.setProperty('--pink', e.target.value); };
 document.getElementById('hlText').oninput = e=>{ document.documentElement.style.setProperty('--pink-strong', e.target.value); };
+
+// ---------- 配色套装（防撞色）：一键切换 高亮色 + 字体 + 背景 的整套组合 ----------
+const THEMES = [
+  {name:'粉甜',     hlBg:'#fce4ec', hlText:'#ff4d6d', font:"-apple-system,'PingFang SC',sans-serif", bg:'#ffffff', pattern:'none',     pc:'#d9d9e0'},
+  {name:'奶黄手账', hlBg:'#fff3c4', hlText:'#d99400', font:"'Noto Serif SC',serif",                 bg:'#fffdf5', pattern:'lines',    pc:'#ece4c8'},
+  {name:'薄荷清新', hlBg:'#d7f5e3', hlText:'#12986a', font:"'ZCOOL XiaoWei',serif",                 bg:'#f4fbf6', pattern:'dots',     pc:'#cde9d8'},
+  {name:'天蓝格子', hlBg:'#d9e8ff', hlText:'#1f6fe0', font:"'Noto Sans SC',sans-serif",             bg:'#f5f9ff', pattern:'grid',     pc:'#d4e3f5'},
+  {name:'紫调可爱', hlBg:'#e8def8', hlText:'#7c4dff', font:"'ZCOOL KuaiLe',cursive",                bg:'#faf7ff', pattern:'diagonal', pc:'#e0d6f2'},
+  {name:'暖橘黄油', hlBg:'#ffe2cc', hlText:'#ef7a1a', font:"'ZCOOL QingKe HuangYou',sans-serif",    bg:'#fff8f2', pattern:'checker',  pc:'#f2e0d2'},
+];
+let lastThemeIdx = 0;
+function applyTheme(t){
+  document.documentElement.style.setProperty('--pink', t.hlBg);
+  document.documentElement.style.setProperty('--pink-strong', t.hlText);
+  document.documentElement.style.setProperty('--page-font', t.font);
+  document.getElementById('hlBg').value = t.hlBg;
+  document.getElementById('hlText').value = t.hlText;
+  state.bg = t.bg;            document.getElementById('bgColor').value = t.bg;
+  state.pattern = t.pattern;  state.patternColor = t.pc;
+  document.getElementById('patternColor').value = t.pc;
+  patternBtns.forEach(x=>x.classList.toggle('on', x.dataset.p===t.pattern));
+  document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));
+  // 预下载该套字体的当前文字字形，避免切换后短暂不显示
+  try{ const fam=t.font.split(',')[0].replace(/['"]/g,'').trim(); document.fonts && document.fonts.load('24px "'+fam+'"','测试中文ABC').catch(()=>{}); }catch(e){}
+  relayout();
+  const lbl=document.getElementById('themeName'); if(lbl) lbl.textContent='· '+t.name;
+}
+function randomTheme(){
+  let i; do{ i=Math.floor(Math.random()*THEMES.length); }while(i===lastThemeIdx && THEMES.length>1);
+  lastThemeIdx=i; applyTheme(THEMES[i]);
+}
+document.getElementById('randomThemeBtn').addEventListener('click', randomTheme);
 
 function setRatio(){
   const v = document.getElementById('ratio').value;
