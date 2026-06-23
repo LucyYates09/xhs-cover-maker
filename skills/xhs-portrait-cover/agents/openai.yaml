@@ -1,0 +1,4 @@
+interface:
+  display_name: "小红书真人封面"
+  short_description: "生成高点击真人封面并精准控制标题、背景和正面柔光效果"
+  default_prompt: "Use $xhs-portrait-cover to turn my portrait and headline into a polished 3:4 Xiaohongshu cover."
